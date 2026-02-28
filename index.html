@@ -166,11 +166,21 @@
 
                 <!-- 시정표 상세 설정 -->
                 <div class="space-y-4">
-                    <h4 class="font-bold text-lg flex items-center gap-2 text-slate-700"><i data-lucide="clock" class="w-5 h-5"></i> 시정표 기준 시간</h4>
-                    <div class="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
-                        <div class="flex-1">
+                    <h4 class="font-bold text-lg flex items-center gap-2 text-slate-700"><i data-lucide="clock" class="w-5 h-5"></i> 시정표 설정</h4>
+                    <div class="flex flex-wrap gap-4 bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                        <div class="flex-1 min-w-[200px]">
                             <label class="text-xs font-bold text-slate-400 mb-1 block">1교시 시작 시간</label>
-                            <input type="time" id="start-time-trigger" class="w-full p-3 border rounded-xl font-bold text-lg" onchange="autoCalculateSchedule(this.value)">
+                            <input type="time" id="start-time-trigger" class="w-full p-3 border rounded-xl font-black text-lg focus:ring-2 focus:ring-orange-400 outline-none" onchange="autoCalculateSchedule(this.value, document.getElementById('lunch-after-input').value)">
+                        </div>
+                        <div class="flex-1 min-w-[200px]">
+                            <label class="text-xs font-bold text-slate-400 mb-1 block text-blue-500">점심시간 위치 설정</label>
+                            <select id="lunch-after-input" class="w-full p-3 border rounded-xl font-black text-lg focus:ring-2 focus:ring-blue-400 outline-none" onchange="autoCalculateSchedule(document.getElementById('start-time-trigger').value, this.value)">
+                                <option value="1">1교시 후 점심</option>
+                                <option value="2">2교시 후 점심</option>
+                                <option value="3">3교시 후 점심</option>
+                                <option value="4" selected>4교시 후 점심</option>
+                                <option value="5">5교시 후 점심</option>
+                            </select>
                         </div>
                     </div>
                     <div id="schedule-editor" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
@@ -191,6 +201,7 @@
             viewMode: 'rules',
             notice: '1. 준비물: 색종이, 가위\n2. 수학 익힘책 45쪽까지 풀기\n3. 우유 급식 신청 확인하기',
             background: { type: 'default', value: '' },
+            lunchAfter: 4,
             ddays: [
                 { text: '여름방학', date: '2026-07-31' }
             ],
@@ -206,11 +217,11 @@
         };
 
         const HOLIDAYS = ['01-01', '03-01', '05-05', '06-06', '08-15', '10-03', '10-09', '12-25'];
-        const saved = localStorage.getItem('classroom_dashboard_config_v14');
+        const saved = localStorage.getItem('classroom_dashboard_config_v15');
         if (saved) {
             config = { ...config, ...JSON.parse(saved) };
         } else {
-            config.schedule = generateDefaultSchedule('09:00');
+            config.schedule = generateDefaultSchedule('09:00', config.lunchAfter);
         }
 
         const audio = document.getElementById('chime-audio');
@@ -252,7 +263,7 @@
             days.forEach((day, idx) => {
                 const select = document.getElementById(`period-${day}`);
                 let options = '';
-                for (let i = 4; i <= 7; i++) {
+                for (let i = 4; i <= 6; i++) {
                     const selected = config.dailyPeriods[idx + 1] == i ? 'selected' : '';
                     options += `<option value="${i}" ${selected}>${i}교시</option>`;
                 }
@@ -338,25 +349,34 @@
             });
         }
 
-        function generateDefaultSchedule(startTime) {
+        function generateDefaultSchedule(startTime, lunchAfter = 4) {
             const [h, m] = startTime.split(':').map(Number);
             let current = h * 60 + m;
             const format = (min) => `${String(Math.floor(min/60)).padStart(2,'0')}:${String(min%60).padStart(2,'0')}`;
+            
             let sch = [{ name: '아침자습', start: '08:30', end: format(current) }];
-            for(let i=1; i<=3; i++) {
-                sch.push({ name: `${i}교시`, start: format(current), end: format(current+40) }); current += 40;
-                sch.push({ name: '쉬는 시간', start: format(current), end: format(current+10) }); current += 10;
-            }
-            sch.push({ name: '4교시', start: format(current), end: format(current+40) }); current += 40;
-            sch.push({ name: '점심 시간', start: format(current), end: format(current+50) }); current += 50;
-            for(let i=5; i<=7; i++) {
-                sch.push({ name: `${i}교시`, start: format(current), end: format(current+40) }); current += 40;
-                if(i<7) { sch.push({ name: '쉬는 시간', start: format(current), end: format(current+10) }); current += 10; }
+            
+            for(let i=1; i<=6; i++) {
+                sch.push({ name: `${i}교시`, start: format(current), end: format(current+40) });
+                current += 40;
+
+                if (i == lunchAfter) {
+                    // 선택한 교시 후에 점심시간 시작
+                    sch.push({ name: '점심 시간', start: format(current), end: format(current+50) });
+                    current += 50;
+                } else if (i < 6) {
+                    // 점심시간이 아닌 일반 교시 후에는 쉬는 시간
+                    sch.push({ name: '쉬는 시간', start: format(current), end: format(current+10) });
+                    current += 10;
+                }
             }
             return sch;
         }
 
-        function autoCalculateSchedule(startTime) { renderScheduleEditor(generateDefaultSchedule(startTime)); }
+        function autoCalculateSchedule(startTime, lunchAfter) { 
+            if (!startTime) startTime = "09:00";
+            renderScheduleEditor(generateDefaultSchedule(startTime, parseInt(lunchAfter))); 
+        }
 
         function renderScheduleEditor(schArray) {
             const editor = document.getElementById('schedule-editor');
@@ -437,6 +457,7 @@
         function openSettings() {
             document.getElementById('settings-modal').style.display = 'flex';
             document.getElementById('bg-url-input').value = config.background.type === 'url' ? config.background.value : '';
+            document.getElementById('lunch-after-input').value = config.lunchAfter || 4;
             
             const dEditor = document.getElementById('dday-editor');
             dEditor.innerHTML = '';
@@ -454,13 +475,11 @@
         function closeSettings() { document.getElementById('settings-modal').style.display = 'none'; }
 
         function saveSettings() {
-            // 배경 URL 수집
             const urlInput = document.getElementById('bg-url-input').value;
-            if (urlInput) {
-                config.background = { type: 'url', value: urlInput };
-            }
+            if (urlInput) config.background = { type: 'url', value: urlInput };
             
-            // D-Day 데이터 수집
+            config.lunchAfter = parseInt(document.getElementById('lunch-after-input').value);
+
             const dTitles = document.querySelectorAll('.dday-title-in');
             const dDates = document.querySelectorAll('.dday-date-in');
             config.ddays = [];
@@ -470,7 +489,6 @@
                 }
             });
 
-            // 요일별 시수 수집
             config.dailyPeriods = {
                 1: parseInt(document.getElementById('period-mon').value),
                 2: parseInt(document.getElementById('period-tue').value),
@@ -479,7 +497,6 @@
                 5: parseInt(document.getElementById('period-fri').value)
             };
 
-            // 시정표 데이터 수집 (입력된 모든 시간 수집)
             const scheduleRows = document.querySelectorAll('.schedule-item-row');
             config.schedule = [];
             scheduleRows.forEach(row => {
@@ -492,7 +509,7 @@
             saveToLocal(); 
             applyBackground(); 
             renderContent(); 
-            updateTime(); // 현재 상태 배지 즉시 갱신 포함
+            updateTime();
             closeSettings();
             showAutoSaveIndicator();
         }
@@ -505,7 +522,7 @@
         }
 
         function saveToLocal() { 
-            localStorage.setItem('classroom_dashboard_config_v14', JSON.stringify(config)); 
+            localStorage.setItem('classroom_dashboard_config_v15', JSON.stringify(config)); 
         }
 
         function applyBackground() {
