@@ -101,7 +101,6 @@
                 </div>
                 <!-- 우측 상단 기능 버튼 영역 -->
                 <div class="flex items-end gap-2 pb-1">
-                    <!-- 자동 저장 시스템으로 변경되어 기존의 개별 '저장' 버튼은 제거 혹은 숨김 처리 -->
                     <div id="auto-save-indicator" class="flex items-center gap-2 px-4 py-2.5 text-slate-400 font-bold transition-all opacity-0">
                         <i data-lucide="check-circle-2" class="w-4 h-4 text-green-500"></i> 자동 저장됨
                     </div>
@@ -118,9 +117,13 @@
         </section>
     </main>
 
-    <!-- 설정 모달 -->
-    <div id="settings-modal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50 p-4 backdrop-blur-sm overflow-y-auto">
-        <div class="bg-white rounded-[2.5rem] w-full max-w-3xl my-8 p-10 shadow-2xl relative">
+    <!-- 설정 모달: items-start와 overflow-y-auto로 수정하여 상단 잘림 방지 -->
+    <div id="settings-modal" 
+         class="fixed inset-0 bg-black/60 hidden items-start justify-center z-50 p-4 backdrop-blur-sm overflow-y-auto"
+         onclick="handleOutsideClick(event)">
+        <!-- 팝업 박스: my-8로 위아래 여백 확보 -->
+        <div class="bg-white rounded-[2.5rem] w-full max-w-3xl my-8 p-10 shadow-2xl relative" 
+             onclick="event.stopPropagation()">
             <div class="flex justify-between items-center mb-8 border-b pb-6">
                 <div class="flex items-center gap-3">
                     <i data-lucide="sliders" class="text-orange-500 w-8 h-8"></i>
@@ -147,9 +150,7 @@
                         <h4 class="font-bold text-lg flex items-center gap-2 text-slate-700"><i data-lucide="calendar-check" class="w-5 h-5"></i> D-Day 관리</h4>
                         <button onclick="addRow('dday-editor')" class="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-sm font-bold border border-blue-100">+ 일정 추가</button>
                     </div>
-                    <div id="dday-editor" class="space-y-3">
-                        <!-- D-Day 편집 행 -->
-                    </div>
+                    <div id="dday-editor" class="space-y-3"></div>
                 </div>
 
                 <!-- 요일별 시수 설정 -->
@@ -178,7 +179,7 @@
             </div>
 
             <div class="mt-12">
-                <button onclick="saveSettings()" class="w-full py-5 bg-orange-500 text-white rounded-2xl font-black text-2xl shadow-xl hover:bg-orange-600 transition-all">설정 저장 및 적용</button>
+                <button onclick="saveSettings()" class="w-full py-5 bg-orange-500 text-white rounded-2xl font-black text-2xl shadow-xl hover:bg-orange-600 active:scale-[0.98] transition-all">설정 저장 및 적용</button>
             </div>
         </div>
     </div>
@@ -206,7 +207,7 @@
         };
 
         const HOLIDAYS = ['01-01', '03-01', '05-05', '06-06', '08-15', '10-03', '10-09', '12-25'];
-        const saved = localStorage.getItem('classroom_dashboard_config_v12');
+        const saved = localStorage.getItem('classroom_dashboard_config_v13');
         if (saved) {
             config = { ...config, ...JSON.parse(saved) };
         } else {
@@ -224,6 +225,11 @@
             updateTime();
             setInterval(updateTime, 1000);
             
+            // 키보드 이벤트 추가 (ESC 키 닫기)
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') closeSettings();
+            });
+
             document.getElementById('bg-file-input').onchange = function(e) {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -231,6 +237,13 @@
                 reader.onload = function() { config.background = { type: 'file', value: reader.result }; applyBackground(); };
                 reader.readAsDataURL(file);
             };
+        }
+
+        function handleOutsideClick(e) {
+            // 클릭 대상이 모달의 배경(overlay)이면 닫기
+            if (e.target.id === 'settings-modal') {
+                closeSettings();
+            }
         }
 
         function renderPeriodSelectors() {
@@ -359,13 +372,10 @@
 
         function toggleView(mode) { config.viewMode = mode; renderContent(); saveToLocal(); }
 
-        // 자동 저장 알림 표시 함수
         function showAutoSaveIndicator() {
             const indicator = document.getElementById('auto-save-indicator');
             indicator.style.opacity = '1';
-            setTimeout(() => {
-                indicator.style.opacity = '0';
-            }, 1000);
+            setTimeout(() => { indicator.style.opacity = '0'; }, 1000);
         }
 
         function renderContent() {
@@ -373,7 +383,6 @@
             const titleEl = document.getElementById('right-title');
             const subtitleEl = document.getElementById('right-subtitle');
             
-            // 모든 탭 버튼 스타일 초기화
             ['rules', 'notice', 'announcements'].forEach(m => {
                 const btn = document.getElementById(`btn-view-${m}`);
                 btn.className = (config.viewMode === m) 
@@ -468,7 +477,7 @@
         }
 
         function resetBackground() { config.background = { type: 'default', value: '' }; applyBackground(); }
-        function saveToLocal() { localStorage.setItem('classroom_dashboard_config_v12', JSON.stringify(config)); }
+        function saveToLocal() { localStorage.setItem('classroom_dashboard_config_v13', JSON.stringify(config)); }
         function applyBackground() {
             const bg = document.getElementById('bg-container');
             if (config.background.type === 'default') { bg.className = "bg-default"; bg.style.backgroundImage = ""; } 
