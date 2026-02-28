@@ -117,11 +117,10 @@
         </section>
     </main>
 
-    <!-- 설정 모달: items-start와 overflow-y-auto로 수정하여 상단 잘림 방지 -->
+    <!-- 설정 모달 -->
     <div id="settings-modal" 
          class="fixed inset-0 bg-black/60 hidden items-start justify-center z-50 p-4 backdrop-blur-sm overflow-y-auto"
          onclick="handleOutsideClick(event)">
-        <!-- 팝업 박스: my-8로 위아래 여백 확보 -->
         <div class="bg-white rounded-[2.5rem] w-full max-w-3xl my-8 p-10 shadow-2xl relative" 
              onclick="event.stopPropagation()">
             <div class="flex justify-between items-center mb-8 border-b pb-6">
@@ -207,7 +206,7 @@
         };
 
         const HOLIDAYS = ['01-01', '03-01', '05-05', '06-06', '08-15', '10-03', '10-09', '12-25'];
-        const saved = localStorage.getItem('classroom_dashboard_config_v13');
+        const saved = localStorage.getItem('classroom_dashboard_config_v14');
         if (saved) {
             config = { ...config, ...JSON.parse(saved) };
         } else {
@@ -225,7 +224,6 @@
             updateTime();
             setInterval(updateTime, 1000);
             
-            // 키보드 이벤트 추가 (ESC 키 닫기)
             window.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape') closeSettings();
             });
@@ -234,13 +232,16 @@
                 const file = e.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
-                reader.onload = function() { config.background = { type: 'file', value: reader.result }; applyBackground(); };
+                reader.onload = function() { 
+                    config.background = { type: 'file', value: reader.result }; 
+                    applyBackground();
+                    saveToLocal();
+                };
                 reader.readAsDataURL(file);
             };
         }
 
         function handleOutsideClick(e) {
-            // 클릭 대상이 모달의 배경(overlay)이면 닫기
             if (e.target.id === 'settings-modal') {
                 closeSettings();
             }
@@ -360,8 +361,8 @@
         function renderScheduleEditor(schArray) {
             const editor = document.getElementById('schedule-editor');
             editor.innerHTML = schArray.map(s => `
-                <div class="flex flex-col gap-1 border p-3 rounded-2xl bg-white shadow-sm">
-                    <span class="font-bold text-[10px] text-slate-400 uppercase tracking-tighter">${s.name}</span>
+                <div class="flex flex-col gap-1 border p-3 rounded-2xl bg-white shadow-sm schedule-item-row">
+                    <span class="font-bold text-[10px] text-slate-400 uppercase tracking-tighter sch-name">${s.name}</span>
                     <div class="flex items-center gap-1">
                         <input type="text" value="${s.start}" class="sch-start-in w-full p-1 border rounded-lg text-center text-xs font-black focus:ring-2 focus:ring-blue-400 outline-none">
                         <span class="text-slate-300">~</span>
@@ -385,9 +386,11 @@
             
             ['rules', 'notice', 'announcements'].forEach(m => {
                 const btn = document.getElementById(`btn-view-${m}`);
-                btn.className = (config.viewMode === m) 
-                    ? "px-5 py-2.5 rounded-lg font-black transition-all text-sm bg-orange-500 text-white shadow-lg" 
-                    : "px-5 py-2.5 rounded-lg font-bold transition-all text-sm text-slate-500 hover:bg-white/60";
+                if(btn) {
+                    btn.className = (config.viewMode === m) 
+                        ? "px-5 py-2.5 rounded-lg font-black transition-all text-sm bg-orange-500 text-white shadow-lg" 
+                        : "px-5 py-2.5 rounded-lg font-bold transition-all text-sm text-slate-500 hover:bg-white/60";
+                }
             });
 
             if (config.viewMode === 'notice') {
@@ -442,6 +445,7 @@
 
             const first = config.schedule.find(s => s.name === '1교시');
             if (first) document.getElementById('start-time-trigger').value = first.start;
+            
             renderPeriodSelectors();
             renderScheduleEditor(config.schedule);
             lucide.createIcons();
@@ -450,16 +454,23 @@
         function closeSettings() { document.getElementById('settings-modal').style.display = 'none'; }
 
         function saveSettings() {
-            const url = document.getElementById('bg-url-input').value;
-            if (url) config.background = { type: 'url', value: url };
+            // 배경 URL 수집
+            const urlInput = document.getElementById('bg-url-input').value;
+            if (urlInput) {
+                config.background = { type: 'url', value: urlInput };
+            }
             
+            // D-Day 데이터 수집
             const dTitles = document.querySelectorAll('.dday-title-in');
             const dDates = document.querySelectorAll('.dday-date-in');
-            config.ddays = Array.from(dTitles).map((t, i) => ({
-                text: t.value,
-                date: dDates[i].value
-            })).filter(x => x.text.trim() && x.date);
+            config.ddays = [];
+            dTitles.forEach((t, i) => {
+                if (t.value.trim() && dDates[i].value) {
+                    config.ddays.push({ text: t.value, date: dDates[i].value });
+                }
+            });
 
+            // 요일별 시수 수집
             config.dailyPeriods = {
                 1: parseInt(document.getElementById('period-mon').value),
                 2: parseInt(document.getElementById('period-tue').value),
@@ -468,20 +479,44 @@
                 5: parseInt(document.getElementById('period-fri').value)
             };
 
-            const starts = document.querySelectorAll('.sch-start-in');
-            const ends = document.querySelectorAll('.sch-end-in');
-            const names = Array.from(document.querySelectorAll('#schedule-editor span')).map(el => el.innerText);
-            config.schedule = names.map((name, i) => ({ name, start: starts[i].value, end: ends[i].value }));
+            // 시정표 데이터 수집 (입력된 모든 시간 수집)
+            const scheduleRows = document.querySelectorAll('.schedule-item-row');
+            config.schedule = [];
+            scheduleRows.forEach(row => {
+                const name = row.querySelector('.sch-name').innerText;
+                const start = row.querySelector('.sch-start-in').value;
+                const end = row.querySelector('.sch-end-in').value;
+                config.schedule.push({ name, start, end });
+            });
 
-            saveToLocal(); applyBackground(); renderContent(); updateDday(new Date()); closeSettings();
+            saveToLocal(); 
+            applyBackground(); 
+            renderContent(); 
+            updateTime(); // 현재 상태 배지 즉시 갱신 포함
+            closeSettings();
+            showAutoSaveIndicator();
         }
 
-        function resetBackground() { config.background = { type: 'default', value: '' }; applyBackground(); }
-        function saveToLocal() { localStorage.setItem('classroom_dashboard_config_v13', JSON.stringify(config)); }
+        function resetBackground() { 
+            config.background = { type: 'default', value: '' }; 
+            document.getElementById('bg-url-input').value = '';
+            applyBackground(); 
+            saveToLocal();
+        }
+
+        function saveToLocal() { 
+            localStorage.setItem('classroom_dashboard_config_v14', JSON.stringify(config)); 
+        }
+
         function applyBackground() {
             const bg = document.getElementById('bg-container');
-            if (config.background.type === 'default') { bg.className = "bg-default"; bg.style.backgroundImage = ""; } 
-            else { bg.className = ""; bg.style.backgroundImage = `url(${config.background.value})`; }
+            if (config.background.type === 'default') { 
+                bg.className = "bg-default"; 
+                bg.style.backgroundImage = ""; 
+            } else { 
+                bg.className = ""; 
+                bg.style.backgroundImage = `url(${config.background.value})`; 
+            }
         }
 
         window.onload = init;
