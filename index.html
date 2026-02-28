@@ -101,10 +101,10 @@
                 </div>
                 <!-- 우측 상단 기능 버튼 영역 -->
                 <div class="flex items-end gap-2 pb-1">
-                    <!-- 저장 버튼: 탭 버튼 내부 주황색 버튼 높이에 맞춰 py-2.5로 수정 -->
-                    <button id="save-direct-btn" onclick="saveAllChanges()" class="hidden flex items-center gap-2 px-6 py-2.5 bg-green-500 text-white rounded-xl font-black shadow-lg hover:bg-green-600 active:scale-95 transition-all">
-                        <i data-lucide="save" class="w-5 h-5"></i> 저장
-                    </button>
+                    <!-- 자동 저장 시스템으로 변경되어 기존의 개별 '저장' 버튼은 제거 혹은 숨김 처리 -->
+                    <div id="auto-save-indicator" class="flex items-center gap-2 px-4 py-2.5 text-slate-400 font-bold transition-all opacity-0">
+                        <i data-lucide="check-circle-2" class="w-4 h-4 text-green-500"></i> 자동 저장됨
+                    </div>
                     <button onclick="openSettings()" class="p-3 bg-white/40 backdrop-blur-md rounded-full hover:bg-white/70 transition-all shadow-lg">
                         <i data-lucide="settings" class="w-8 h-8 text-slate-700"></i>
                     </button>
@@ -359,27 +359,34 @@
 
         function toggleView(mode) { config.viewMode = mode; renderContent(); saveToLocal(); }
 
+        // 자동 저장 알림 표시 함수
+        function showAutoSaveIndicator() {
+            const indicator = document.getElementById('auto-save-indicator');
+            indicator.style.opacity = '1';
+            setTimeout(() => {
+                indicator.style.opacity = '0';
+            }, 1000);
+        }
+
         function renderContent() {
             const container = document.getElementById('content-display-area');
             const titleEl = document.getElementById('right-title');
             const subtitleEl = document.getElementById('right-subtitle');
-            const saveBtn = document.getElementById('save-direct-btn');
-
+            
+            // 모든 탭 버튼 스타일 초기화
             ['rules', 'notice', 'announcements'].forEach(m => {
                 const btn = document.getElementById(`btn-view-${m}`);
                 btn.className = (config.viewMode === m) 
-                    ? "px-5 py-2.5 rounded-xl font-black transition-all text-sm bg-orange-500 text-white shadow-lg" 
-                    : "px-5 py-2.5 rounded-xl font-black transition-all text-sm text-slate-500 hover:bg-white/60";
+                    ? "px-5 py-2.5 rounded-lg font-black transition-all text-sm bg-orange-500 text-white shadow-lg" 
+                    : "px-5 py-2.5 rounded-lg font-bold transition-all text-sm text-slate-500 hover:bg-white/60";
             });
 
             if (config.viewMode === 'notice') {
-                saveBtn.classList.add('hidden');
                 titleEl.innerText = "알림장"; subtitleEl.innerText = "Notice Board";
                 container.innerHTML = `<div class="glass p-10 rounded-[3rem] shadow-xl h-full flex flex-col border-white/50">
-                        <textarea id="notice-textarea" oninput="config.notice = this.value; saveToLocal();" placeholder="오늘의 알림 사항을 입력하세요...">${config.notice}</textarea></div>`;
+                        <textarea id="notice-textarea" oninput="config.notice = this.value; saveToLocal(); showAutoSaveIndicator();" placeholder="오늘의 알림 사항을 입력하세요...">${config.notice}</textarea></div>`;
             } 
             else {
-                saveBtn.classList.remove('hidden');
                 const type = config.viewMode === 'rules' ? 'rules' : 'announcements';
                 titleEl.innerText = type === 'rules' ? "우리 반 약속" : "공지사항";
                 subtitleEl.innerText = type === 'rules' ? "Class Rules" : "Announcements";
@@ -390,26 +397,16 @@
                         <div class="glass p-6 rounded-[2rem] shadow-lg flex items-center gap-6 border-white/40 group card-anim">
                             <span class="text-4xl font-black ${type === 'rules' ? 'text-blue-500' : 'text-green-500'} opacity-20">${String(idx + 1).padStart(2, '0')}</span>
                             <div class="flex-1">
-                                <input type="text" value="${item.title}" oninput="config['${type}'][${idx}].title = this.value" class="editable-input text-2xl font-black text-slate-800" placeholder="제목">
-                                <input type="text" value="${item.desc}" oninput="config['${type}'][${idx}].desc = this.value" class="editable-input text-lg text-slate-500 font-bold mt-1" placeholder="내용">
+                                <input type="text" value="${item.title}" oninput="config['${type}'][${idx}].title = this.value; saveToLocal(); showAutoSaveIndicator();" class="editable-input text-2xl font-black text-slate-800" placeholder="제목">
+                                <input type="text" value="${item.desc}" oninput="config['${type}'][${idx}].desc = this.value; saveToLocal(); showAutoSaveIndicator();" class="editable-input text-lg text-slate-500 font-bold mt-1" placeholder="내용">
                             </div>
-                            <button onclick="config['${type}'].splice(${idx}, 1); renderContent();" class="p-2 text-red-400 opacity-0 group-hover:opacity-100 transition-all"><i data-lucide="trash-2"></i></button>
+                            <button onclick="config['${type}'].splice(${idx}, 1); renderContent(); saveToLocal(); showAutoSaveIndicator();" class="p-2 text-red-400 opacity-0 group-hover:opacity-100 transition-all"><i data-lucide="trash-2"></i></button>
                         </div>`;
                 });
-                html += `<button onclick="config['${type}'].push({title:'', desc:''}); renderContent();" class="w-full py-5 border-4 border-dashed border-white/40 rounded-[2rem] text-white/60 font-black hover:bg-white/20 transition-all flex items-center justify-center gap-2">+ 추가하기</button></div>`;
+                html += `<button onclick="config['${type}'].push({title:'', desc:''}); renderContent(); saveToLocal(); showAutoSaveIndicator();" class="w-full py-5 border-4 border-dashed border-white/40 rounded-[2rem] text-white/60 font-black hover:bg-white/20 transition-all flex items-center justify-center gap-2">+ 추가하기</button></div>`;
                 container.innerHTML = html;
             }
             lucide.createIcons();
-        }
-
-        function saveAllChanges() {
-            saveToLocal();
-            const btn = document.getElementById('save-direct-btn');
-            const original = btn.innerHTML;
-            btn.innerHTML = `<i data-lucide="check" class="w-5 h-5"></i> 완료`;
-            btn.className = btn.className.replace('bg-green-500', 'bg-blue-500');
-            lucide.createIcons();
-            setTimeout(() => { btn.innerHTML = original; btn.className = btn.className.replace('bg-blue-500', 'bg-green-500'); lucide.createIcons(); }, 1000);
         }
 
         function addRow(containerId, title = "", date = "") {
